@@ -7,28 +7,36 @@ import { useAuth } from '@/context/AuthContext';
 
 export interface Course {
   id: string;
+  _id?: string; // Optional for compatibility with backend
   title: string;
   description: string;
   imageUrl: string;
   category: string;
-  level: 'Beginner' | 'Intermediate' | 'Advanced';
+  level: string;
   duration: string;
   instructor: {
     name: string;
+    _id?: string;
     avatarUrl: string;
   };
   enrolled?: boolean;
   progress?: number;
   isFree: boolean;
-  price?: number;
+  price: number;
   rating: number;
   studentsCount: number;
+  lessons: number;
   sections?: Array<{
     title: string;
     subtitle?: string;
     content: string;
     videoUrl?: string;
   }>;
+  enrolledCount?: number;
+  reviews?: Array<any>;
+  createdAt?: string;
+  updatedAt?: string;
+  thumbnail?: string;
 }
 
 interface CourseCardProps {
@@ -37,7 +45,7 @@ interface CourseCardProps {
   onClick?: () => void;
 }
 
-export const CourseCard: React.FC<CourseCardProps> = ({ course, onEnroll, onClick }) => {
+export const CourseCard: React.FC<CourseCardProps> = ({ course, onEnroll }) => {
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -54,7 +62,6 @@ export const CourseCard: React.FC<CourseCardProps> = ({ course, onEnroll, onClic
   return (
     <div 
       className="overflow-hidden rounded-xl bg-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-gray-800 cursor-pointer"
-      onClick={onClick}
     >
       <div className="relative aspect-video overflow-hidden">
         <img

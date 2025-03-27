@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MarkdownViewer } from '@/components/ui/markdown-viewer';
 import PaymentModal from './PaymentModal';
+import { toBackendCourseWithId } from '@/adapters/courseAdapter';
 
 interface CourseDetailsModalProps {
   course: Course | null;
@@ -188,12 +189,14 @@ const CourseDetailsModal: React.FC<CourseDetailsModalProps> = ({
         </DialogContent>
       </Dialog>
       
-      <PaymentModal 
-        course={course}
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        onSuccess={onEnroll}
-      />
+      {course && (
+        <PaymentModal 
+          course={toBackendCourseWithId(course)}
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          onSuccess={() => onEnroll(course.id)}
+        />
+      )}
     </>
   );
 };

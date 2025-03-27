@@ -1,163 +1,134 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import authService, { AuthResponse } from '@/services/authService';
+import userService, { UserProfile, UpdateProfileData } from '@/services/userService';
+import { useToast } from '@/hooks/use-toast';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-// User type definition
 export interface User {
-  id: string;
+  _id: string;
+  id?: string; // Add this for compatibility
   name: string;
   email: string;
-  role: 'student' | 'mentor' | 'admin';
+  role: string;
   avatar?: string;
   bio?: string;
 }
 
-// Auth context type definition
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  updateProfile: (data: Partial<User>) => Promise<void>;
+  updateProfile: (data: UpdateProfileData) => Promise<User>;
 }
 
-// Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock user data for development
-const MOCK_USERS = [
-  {
-    id: '1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    password: 'password123',
-    role: 'student' as const,
-    avatar: 'https://i.pravatar.cc/150?img=1',
-    bio: 'Eager learner interested in East African history and languages.',
-  },
-  {
-    id: '2',
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    password: 'password123',
-    role: 'mentor' as const,
-    avatar: 'https://i.pravatar.cc/150?img=5',
-    bio: 'Cultural expert with 10 years of experience teaching Swahili.',
-  },
-  {
-    id: '3',
-    name: 'Admin User',
-    email: 'admin@example.com',
-    password: 'admin123',
-    role: 'admin' as const,
-    avatar: 'https://i.pravatar.cc/150?img=8',
-    bio: 'Platform administrator and content manager.',
-  },
-];
-
-// Auth provider component
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
-  // Check for existing session on load
+  // Check if user is authenticated on app load
   useEffect(() => {
-    const checkAuthStatus = () => {
-      const savedUser = localStorage.getItem('umuco_user');
-      
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-      }
-      
-      // Simulate network delay for loading state
-      setTimeout(() => {
+    const checkAuth = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+        
+        // Get user profile
+        const userData = await userService.getProfile();
+        setUser(preprocessUserData(userData));
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        // Clear invalid tokens
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+      } finally {
         setIsLoading(false);
-      }, 1000);
+      }
     };
-
-    checkAuthStatus();
+    
+    checkAuth();
   }, []);
 
-  // Mock login function
   const login = async (email: string, password: string) => {
-    // Simulate API request
     setIsLoading(true);
-    
-    return new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
-        const foundUser = MOCK_USERS.find(u => u.email === email && u.password === password);
-        
-        if (foundUser) {
-          // Remove password from user object before storing
-          const { password, ...userWithoutPassword } = foundUser;
-          setUser(userWithoutPassword);
-          localStorage.setItem('umuco_user', JSON.stringify(userWithoutPassword));
-          setIsLoading(false);
-          resolve();
-        } else {
-          setIsLoading(false);
-          reject(new Error('Invalid email or password'));
-        }
-      }, 1000); // Simulate network delay
-    });
+    try {
+      const userData = await authService.login({ email, password });
+      setUser(preprocessUserData(userData));
+      toast({
+        title: 'Welcome back!',
+        description: 'You have successfully logged in.',
+      });
+    } catch (error) {
+      console.error('Login failed:', error);
+      toast({
+        title: 'Login failed',
+        description: 'Please check your credentials and try again.',
+        variant: 'destructive',
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Mock register function
   const register = async (name: string, email: string, password: string) => {
-    // Simulate API request
     setIsLoading(true);
-    
-    return new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
-        const existingUser = MOCK_USERS.find(u => u.email === email);
-        
-        if (existingUser) {
-          setIsLoading(false);
-          reject(new Error('Email already in use'));
-        } else {
-          // Create new user
-          const newUser = {
-            id: `user_${Date.now()}`,
-            name,
-            email,
-            role: 'student' as const,
-            avatar: `https://i.pravatar.cc/150?u=${email}`,
-          };
-          
-          setUser(newUser);
-          localStorage.setItem('umuco_user', JSON.stringify(newUser));
-          setIsLoading(false);
-          resolve();
-        }
-      }, 1000); // Simulate network delay
-    });
+    try {
+      const userData = await authService.register({ name, email, password });
+      setUser(preprocessUserData(userData));
+      toast({
+        title: 'Welcome to Umuco!',
+        description: 'Your account has been created successfully.',
+      });
+    } catch (error) {
+      console.error('Registration failed:', error);
+      toast({
+        title: 'Registration failed',
+        description: 'Please check your information and try again.',
+        variant: 'destructive',
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Logout function
   const logout = () => {
+    authService.logout();
     setUser(null);
-    localStorage.removeItem('umuco_user');
-  };
-
-  // Update profile function
-  const updateProfile = async (data: Partial<User>) => {
-    setIsLoading(true);
-    
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        if (user) {
-          const updatedUser = { ...user, ...data };
-          setUser(updatedUser);
-          localStorage.setItem('umuco_user', JSON.stringify(updatedUser));
-        }
-        setIsLoading(false);
-        resolve();
-      }, 1000); // Simulate network delay
+    navigate('/');
+    toast({
+      title: 'Logged out',
+      description: 'You have been logged out successfully.',
     });
   };
 
-  // Provide auth context
+  const updateProfile = async (data: UpdateProfileData): Promise<User> => {
+    try {
+      const updatedUser = await userService.updateProfile(data);
+      const processedUser = preprocessUserData(updatedUser);
+      setUser(processedUser);
+      return processedUser;
+    } catch (error) {
+      console.error('Profile update failed:', error);
+      toast({
+        title: 'Update failed',
+        description: 'Failed to update your profile.',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -167,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
-        updateProfile,
+        updateProfile
       }}
     >
       {children}
@@ -175,12 +146,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-// Hook to use auth context
-// eslint-disable-next-line react-refresh/only-export-components
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+const preprocessUserData = (userData: User): User => {
+  return {
+    ...userData,
+    id: userData._id, // Add id as alias of _id
+  };
 };

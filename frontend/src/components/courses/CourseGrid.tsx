@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, BookOpen, Clock } from 'lucide-react';
+import { Search, BookOpen } from 'lucide-react';
 import { CourseCard, Course } from './CourseCard';
 import CourseDetailsModal from './CourseDetailsModal';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useCategories } from '@/hooks/useCategories';
 
 interface CourseGridProps {
   courses: Course[];
@@ -29,6 +30,7 @@ export const CourseGrid: React.FC<CourseGridProps> = ({
   limit
 }) => {
   const { t } = useTranslation();
+  const { courseCategories, isLoadingCourseCategories } = useCategories();
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -74,8 +76,7 @@ export const CourseGrid: React.FC<CourseGridProps> = ({
     setSelectedCourse(null);
   };
 
-  // Get unique categories and levels for filters
-  const categories = Array.from(new Set(courses.map(course => course.category))).filter(Boolean);
+  // Get unique levels for filters
   const levels = Array.from(new Set(courses.map(course => course.level))).filter(Boolean);
   
   return (
@@ -99,9 +100,9 @@ export const CourseGrid: React.FC<CourseGridProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('courses.all')}</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                {!isLoadingCourseCategories && courseCategories.map((category) => (
+                  <SelectItem key={category._id} value={category.name}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -147,7 +148,7 @@ export const CourseGrid: React.FC<CourseGridProps> = ({
         </div>
       )}
       
-      {!onCourseClick && (
+      {!onCourseClick && selectedCourse && (
         <CourseDetailsModal
           course={selectedCourse}
           isOpen={!!selectedCourse}

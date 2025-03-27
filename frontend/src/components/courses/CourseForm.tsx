@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
@@ -71,16 +70,45 @@ const courseFormSchema = z.object({
 
 type CourseFormValues = z.infer<typeof courseFormSchema>;
 
-const CourseForm = ({ initialData = null, onSubmit }) => {
+interface CourseFormProps {
+  initialData?: any;
+  onSubmit: (values: CourseFormValues) => void;
+  categories?: string[];
+}
+
+const CourseForm: React.FC<CourseFormProps> = ({ initialData = null, onSubmit, categories = [] }) => {
   const { t } = useTranslation();
   const [coverImagePreview, setCoverImagePreview] = useState(initialData?.imageUrl || '');
+  
+  // Default categories if none provided from props
+  const defaultCategories = [
+    "Languages",
+    "History",
+    "Music",
+    "Dance",
+    "Literature",
+    "Cuisine",
+    "Crafts",
+    "Art",
+    "Religion",
+    "Philosophy",
+    "Clothing",
+  ];
+  
+  // Use categories from props if available, otherwise use defaults
+  const availableCategories = categories.length > 0 ? categories : defaultCategories;
   
   // Form setup
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseFormSchema),
     defaultValues: initialData ? {
       ...initialData,
-      sections: initialData.sections || [{
+      sections: initialData.lessons? initialData.lessons?.map(lesson => ({
+        title: lesson.title,
+        subtitle: '',
+        content: lesson.content,
+        videoUrl: lesson.videoUrl || '',
+      })) : [{
         title: '',
         subtitle: '',
         content: '',
@@ -109,21 +137,6 @@ const CourseForm = ({ initialData = null, onSubmit }) => {
     control: form.control,
     name: "sections",
   });
-  
-  // Categories
-  const categories = [
-    "Languages",
-    "History",
-    "Music",
-    "Dance",
-    "Literature",
-    "Cuisine",
-    "Crafts",
-    "Art",
-    "Religion",
-    "Philosophy",
-    "Clothing",
-  ];
   
   // Levels
   const levels = ["Beginner", "Intermediate", "Advanced"];
@@ -209,7 +222,7 @@ const CourseForm = ({ initialData = null, onSubmit }) => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {categories.map((category) => (
+                        {availableCategories.map((category) => (
                           <SelectItem key={category} value={category}>
                             {category}
                           </SelectItem>

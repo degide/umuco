@@ -15,8 +15,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Course } from '@/components/courses/CourseCard';
+import { Course } from '@/services/courseService';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import enrollmentService from '@/services/enrollmentService';
 
 interface PaymentModalProps {
   course: Course | null;
@@ -43,7 +44,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   
   if (!course) return null;
   
-  const handlePayment = (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
@@ -58,20 +59,31 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     
     setIsProcessing(true);
     
-    // Simulate payment processing
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      // Mock payment ID (in a real app, this would come from a payment processor)
+      const mockPaymentId = `pay_${Date.now()}`;
       
-      // Success
+      // Enroll in the course with payment ID
+      await enrollmentService.enrollInCourse(course._id, mockPaymentId);
+      
       toast({
         title: t('courses.paymentSuccess'),
         description: t('courses.enrollmentSuccess', { courseName: course.title }),
       });
       
-      onSuccess(course.id);
+      onSuccess(course._id);
       onClose();
-      navigate(`/course/${course.id}/learn`);
-    }, 1500);
+      navigate(`/course/${course._id}/learn`);
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast({
+        title: t('courses.paymentFailed'),
+        description: t('courses.enrollmentFailed'),
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
   
   return (

@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/context/AuthContext';
+import { MessageSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -12,8 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -21,9 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { MarkdownEditor } from '@/components/ui/markdown-editor';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useForumPosts } from '@/hooks/useForumPosts';
+import { useCategories } from '@/hooks/useCategories';
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -32,86 +30,94 @@ interface CreatePostModalProps {
 
 const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const { createPost } = useForumPosts();
+  const { forumCategories, isLoadingForumCategories } = useCategories();
   
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const categories = [
-    'General',
-    'Food & Cuisine',
-    'Languages',
-    'Traditions & Ceremonies',
-    'Music & Arts',
-    'Literature & Philosophy',
-    'History',
-  ];
-  
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!title || !content || !category) {
-      toast({
-        title: t('forum.validation.title'),
-        description: t('forum.validation.allFieldsRequired'),
-        variant: "destructive",
-      });
-      return;
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+      setContent('');
+      setCategory('');
     }
+  }, [isOpen]);
+  
+  // Set default category when categories are loaded
+  useEffect(() => {
+    if (forumCategories.length > 0 && !category) {
+      setCategory(forumCategories[0].name);
+    }
+  }, [forumCategories, category]);
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !content.trim() || !category) return;
     
-    // In a real app, this would be an API call to create the post
-    // For now, we'll just show a success message
-    toast({
-      title: t('forum.postCreated'),
-      description: t('forum.postCreatedDescription'),
-    });
-    
-    onClose();
-    
-    // Reset form
-    setTitle('');
-    setContent('');
-    setCategory('');
+    try {
+      setIsSubmitting(true);
+      await createPost({
+        title: title.trim(),
+        content: content.trim(),
+        category,
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error creating post:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{t('forum.createNewPost')}</DialogTitle>
-          <DialogDescription>
-            {t('forum.createPostDescription')}
-          </DialogDescription>
-        </DialogHeader>
-        
-        <ScrollArea className="flex-1 pr-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <DialogContent className="sm:max-w-[600px]">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <MessageSquare className="h-5 w-5 mr-2" />
+              {t('forum.createNewPost')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('forum.createPostDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="post-title">{t('forum.postTitle')}</Label>
+              <label htmlFor="title" className="text-sm font-medium">
+                {t('forum.postTitle')}
+              </label>
               <Input
-                id="post-title"
+                id="title"
+                placeholder={t('forum.titlePlaceholder')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={t('forum.titlePlaceholder')}
+                required
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="post-category">{t('forum.category')}</Label>
+              <label htmlFor="category" className="text-sm font-medium">
+                {t('forum.category')}
+              </label>
               <Select
                 value={category}
                 onValueChange={setCategory}
+                disabled={isLoadingForumCategories}
+                required
               >
-                <SelectTrigger id="post-category">
+                <SelectTrigger>
                   <SelectValue placeholder={t('forum.selectCategory')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
+                  {forumCategories.map((category) => (
+                    <SelectItem key={category._id} value={category.name}>
+                      {category.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -119,25 +125,37 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose }) =>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="post-content">{t('forum.content')}</Label>
-              <MarkdownEditor
-                value={content}
-                onChange={setContent}
+              <label htmlFor="content" className="text-sm font-medium">
+                {t('forum.postContent')}
+              </label>
+              <Textarea
+                id="content"
                 placeholder={t('forum.contentPlaceholder')}
-                minHeight="200px"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="min-h-[150px]"
+                required
               />
             </div>
-          </form>
-        </ScrollArea>
-        
-        <DialogFooter className="pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" onClick={handleSubmit}>
-            {t('forum.publish')}
-          </Button>
-        </DialogFooter>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting || !title.trim() || !content.trim() || !category}
+            >
+              {isSubmitting ? t('common.posting') : t('common.post')}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

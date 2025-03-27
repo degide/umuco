@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, MessageSquare, Plus } from 'lucide-react';
 import { ForumPost, ForumPostType } from './ForumPost';
@@ -12,6 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useForumPosts } from '@/hooks/useForumPosts';
+import { useAuth } from '@/context/AuthContext';
+import { useCategories } from '@/hooks/useCategories';
 
 export interface ForumListProps {
   showFilters?: boolean;
@@ -19,119 +22,56 @@ export interface ForumListProps {
   limit?: number;
 }
 
-// Mock forum data
-const MOCK_POSTS: ForumPostType[] = [
-  {
-    id: '1',
-    title: 'Learning Wolof: My Journey So Far',
-    content: 'I\'ve been learning Wolof for about 3 months now and wanted to share my experience...',
-    authorId: 'user1',
-    authorName: 'Aminata Diop',
-    authorAvatar: 'https://i.pravatar.cc/150?img=44',
-    category: 'Languages',
-    createdAt: '2023-05-15T14:32:00Z',
-    likes: 24,
-    views: 342,
-    replies: [],
-    isLiked: false,
-  },
-  {
-    id: '2',
-    title: 'Traditional Cooking Techniques from East Africa',
-    content: 'I recently attended a workshop on traditional East African cooking methods...',
-    authorId: 'user2',
-    authorName: 'James Ouma',
-    authorAvatar: 'https://i.pravatar.cc/150?img=68',
-    category: 'Food & Cuisine',
-    createdAt: '2023-05-12T09:15:00Z',
-    likes: 18,
-    views: 273,
-    replies: [],
-  },
-  {
-    id: '3',
-    title: 'Wedding Ceremonies Across African Cultures',
-    content: 'The diversity of wedding traditions across the continent is fascinating...',
-    authorId: 'user3',
-    authorName: 'Zainab Ahmed',
-    authorAvatar: 'https://i.pravatar.cc/150?img=41',
-    category: 'Traditions & Ceremonies',
-    createdAt: '2023-05-10T11:45:00Z',
-    likes: 32,
-    views: 415,
-    replies: [],
-  },
-  {
-    id: '4',
-    title: 'Modern African Literature Recommendations',
-    content: 'I\'ve been exploring contemporary African literature and wanted to share some gems...',
-    authorId: 'user4',
-    authorName: 'Kwame Mensah',
-    authorAvatar: 'https://i.pravatar.cc/150?img=60',
-    category: 'Literature & Philosophy',
-    createdAt: '2023-05-08T16:20:00Z',
-    likes: 27,
-    views: 389,
-    replies: [],
-  },
-  {
-    id: '5',
-    title: 'Drumming Patterns of West Africa',
-    content: 'As someone who\'s been studying West African percussion for years...',
-    authorId: 'user5',
-    authorName: 'Abdul Sankara',
-    authorAvatar: 'https://i.pravatar.cc/150?img=52',
-    category: 'Music & Arts',
-    createdAt: '2023-05-05T13:10:00Z',
-    likes: 15,
-    views: 241,
-    replies: [],
-  },
-];
-
 export const ForumList: React.FC<ForumListProps> = ({ 
   showFilters = false, 
   onCreatePost,
   limit 
 }) => {
   const { t } = useTranslation();
+  const { isAuthenticated } = useAuth();
+  const { 
+    posts, 
+    isLoading, 
+    fetchPosts,
+    likePost,
+    addComment
+  } = useForumPosts();
+  const { forumCategories, isLoadingForumCategories } = useCategories();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   
-  // Apply filters and search
-  let filteredPosts = [...MOCK_POSTS];
+  useEffect(() => {
+    fetchPosts(1, limit || 10, categoryFilter !== 'all' ? categoryFilter : '', searchQuery);
+  }, [searchQuery, categoryFilter, limit]);
   
-  if (searchQuery) {
-    filteredPosts = filteredPosts.filter(
-      post => post.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-             post.content.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }
+  // Display posts based on limit
+  const displayPosts = limit ? posts.slice(0, limit) : posts;
   
-  if (categoryFilter && categoryFilter !== 'all') {
-    filteredPosts = filteredPosts.filter(post => post.category === categoryFilter);
-  }
-
-  // Apply limit if provided
-  if (limit && limit > 0) {
-    filteredPosts = filteredPosts.slice(0, limit);
-  }
-  
-  // Categories for filter
-  const categories = [
-    'General',
-    'Food & Cuisine',
-    'Languages',
-    'Traditions & Ceremonies',
-    'Music & Arts',
-    'Literature & Philosophy',
-    'History',
-  ];
-
   const handleToggleExpand = (postId: string) => {
     setExpandedPostId(expandedPostId === postId ? null : postId);
   };
+  
+  const handleLikePost = (postId: string) => {
+    if (isAuthenticated) {
+      likePost(postId);
+    }
+  };
+  
+  const handleAddComment = (postId: string, comment: string) => {
+    if (isAuthenticated && comment.trim()) {
+      addComment(postId, comment);
+    }
+  };
+  
+  if (isLoading || isLoadingForumCategories) {
+    return (
+      <div className="flex justify-center items-center h-40">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-umuco-primary"></div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6">
@@ -156,9 +96,9 @@ export const ForumList: React.FC<ForumListProps> = ({
                 <SelectItem value="all">
                   {t('courses.all')}
                 </SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                {forumCategories.map((category) => (
+                  <SelectItem key={category._id} value={category.name}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -174,7 +114,7 @@ export const ForumList: React.FC<ForumListProps> = ({
         </div>
       )}
       
-      {filteredPosts.length === 0 ? (
+      {displayPosts.length === 0 ? (
         <div className="text-center py-12 border border-dashed rounded-lg">
           <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -192,12 +132,14 @@ export const ForumList: React.FC<ForumListProps> = ({
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredPosts.map((post) => (
+          {displayPosts.map((post) => (
             <ForumPost 
-              key={post.id} 
+              key={post._id} 
               post={post} 
-              isExpanded={expandedPostId === post.id}
+              isExpanded={expandedPostId === post._id}
               onToggleExpand={handleToggleExpand}
+              onLike={handleLikePost}
+              onComment={handleAddComment}
             />
           ))}
         </div>

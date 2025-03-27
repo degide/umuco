@@ -1,34 +1,45 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate } from 'react-router-dom';
-import { Book, Plus, PlusCircle, Edit, Trash2, Info, DollarSign, Layers, Users, TrendingUp } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Book, BookOpen, Users, CalendarDays, PlusCircle, Edit } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { useAuth } from '@/context/AuthContext';
+import { useCourses } from '@/hooks/useCourses';
+import { useEvents } from '@/hooks/useEvents';
+import { CourseCard } from '@/components/courses/CourseCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import CourseForm from '@/components/courses/CourseForm';
-import { useCourses } from '@/hooks/useCourses';
+import CreateEventModal from '@/components/events/CreateEventModal';
+import { EventsPanel } from '@/components/dashboard/EventsPanel';
+import CreateCourseModal from '@/components/courses/CreateCourseModal';
 
 const MentorDashboard = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { toast } = useToast();
-  const { courses, addCourse, updateCourse, deleteCourse } = useCourses();
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<any>(null);
+  const { 
+    courses, 
+    isLoading: isLoadingCourses,
+    createCourse,
+    updateCourse 
+  } = useCourses();
+  
+  const { 
+    events, 
+    isLoading: isLoadingEvents, 
+    fetchOrganizedEvents
+  } = useEvents();
+  
+  const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [isCreateCourseModalOpen, setIsCreateCourseModalOpen] = useState(false);
+  const [courseToEdit, setCourseToEdit] = useState(null);
+  
+  useEffect(() => {
+    fetchOrganizedEvents();
+  }, []);
   
   if (isLoading) {
     return (
@@ -41,425 +52,215 @@ const MentorDashboard = () => {
   if (!isAuthenticated || user?.role !== 'mentor') {
     return <Navigate to="/login" />;
   }
-
-  const handleCreateCourse = (courseData) => {
-    addCourse({
-      ...courseData,
-      instructor: {
-        name: user?.name,
-        avatarUrl: user?.avatar || 'https://i.pravatar.cc/150?img=5',
-      },
-      id: `course_${Date.now()}`,
-      studentsCount: 0,
-      rating: 0,
-    });
-    
-    setIsCreateDialogOpen(false);
-    toast({
-      title: "Course created",
-      description: "Your course has been created successfully.",
-    });
-  };
-
-  const handleEditCourse = (courseData) => {
-    updateCourse({
-      ...selectedCourse,
-      ...courseData,
-    });
-    
-    setSelectedCourse(null);
-    toast({
-      title: "Course updated",
-      description: "Your course has been updated successfully.",
-    });
-  };
-
-  const handleDeleteCourse = (courseId) => {
-    deleteCourse(courseId);
-    
-    toast({
-      title: "Course deleted",
-      description: "Your course has been deleted successfully.",
-    });
-  };
-
-  const mentorCourses = courses.filter(
-    (course) => course.instructor?.name === user?.name
-  );
   
-  // Calculate earnings
-  const calculateTotalEarnings = () => {
-    return mentorCourses.reduce((total, course) => {
-      if (!course.isFree) {
-        // Assume each enrollment is a sale for paid courses
-        return total + (course.price || 0) * (course.studentsCount || 0);
-      }
-      return total;
-    }, 0);
+  // Filter for instructor's courses
+  const instructorCourses = courses.filter(course => {
+    if (course.instructor && user) {
+      // Safely access _id with optional chaining
+      return (course.instructor._id && course.instructor._id === user.id) || course.instructor.name === user.name;
+    }
+    return false;
+  });
+  
+  // Get total enrolled students
+  const totalStudents = instructorCourses.reduce((acc, course) => acc + (course.enrolledCount || 0), 0);
+  
+  const handleCreateCourse = async (courseData) => {
+    try {
+      await createCourse(courseData);
+      setIsCreateCourseModalOpen(false);
+    } catch (error) {
+      console.error('Failed to create course:', error);
+    }
   };
   
-  // Calculate monthly earnings (mock data)
-  const calculateMonthlyEarnings = () => {
-    return Math.round(calculateTotalEarnings() * 0.2); // 20% of total as this month's earnings
+  const handleEditCourse = (course) => {
+    setCourseToEdit(course);
+    setIsCreateCourseModalOpen(true);
   };
   
-  // Count published courses
-  const publishedCoursesCount = mentorCourses.length;
+  const handleUpdateCourse = async (courseData) => {
+    try {
+      await updateCourse(courseToEdit._id, courseData);
+      setIsCreateCourseModalOpen(false);
+      setCourseToEdit(null);
+    } catch (error) {
+      console.error('Failed to update course:', error);
+    }
+  };
   
-  // Count total students
-  const totalStudentsCount = mentorCourses.reduce(
-    (total, course) => total + (course.studentsCount || 0), 
-    0
-  );
-
   return (
     <>
       <Navbar />
-      <main className="min-h-screen pt-24 pb-16 bg-gray-50 dark:bg-gray-900">
+      <main className="min-h-screen pt-24 pb-16 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                {t('dashboard.mentorDashboard')}
-              </h1>
-              <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">
-                {t('dashboard.welcomeMessage')}, {user?.name}!
-              </p>
-            </div>
-            
-            <Button 
-              className="mt-4 md:mt-0" 
-              onClick={() => setIsCreateDialogOpen(true)}
-            >
-              <PlusCircle className="mr-2 h-4 w-4" />
-              {t('courses.createCourse')}
-            </Button>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-umuco-primary to-umuco-secondary">
+              {t('dashboard.welcome')}, {user?.name}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              {t('dashboard.mentorDashboardDescription')}
+            </p>
           </div>
           
-          {/* Dashboard Summary Cards */}
-          <div className="grid gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {/* Overview cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t('courses.totalEarnings')}
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  {t('dashboard.yourCourses')}
                 </CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${calculateTotalEarnings().toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground">
-                  {t('dashboard.earningsOverview')}
-                </p>
+                <div className="flex items-center">
+                  <BookOpen className="h-8 w-8 text-umuco-primary mr-3" />
+                  <div className="text-2xl font-bold">
+                    {isLoadingCourses ? '...' : instructorCourses.length}
+                  </div>
+                </div>
               </CardContent>
             </Card>
             
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t('courses.earningsThisMonth')}
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">${calculateMonthlyEarnings().toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground">
-                  {t('dashboard.revenue')}
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t('courses.publishedCourses')}
-                </CardTitle>
-                <Layers className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{publishedCoursesCount}</div>
-                <p className="text-xs text-muted-foreground">
-                  {t('dashboard.courseStats')}
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {t('courses.enrolledStudents')}
-                </CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalStudentsCount}</div>
-                <p className="text-xs text-muted-foreground">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('dashboard.totalStudents')}
-                </p>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center">
+                  <Users className="h-8 w-8 text-blue-500 mr-3" />
+                  <div className="text-2xl font-bold">
+                    {isLoadingCourses ? '...' : totalStudents}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  {t('dashboard.scheduledEvents')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center">
+                  <CalendarDays className="h-8 w-8 text-green-500 mr-3" />
+                  <div className="text-2xl font-bold">
+                    {isLoadingEvents ? '...' : events.length}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
           
-          <Tabs defaultValue="my-courses">
-            <TabsList className="mb-8">
-              <TabsTrigger value="my-courses">{t('courses.myCourses')}</TabsTrigger>
-              <TabsTrigger value="stats">{t('dashboard.stats')}</TabsTrigger>
-              <TabsTrigger value="earnings">{t('dashboard.earnings')}</TabsTrigger>
+          {/* Content Tabs */}
+          <Tabs defaultValue="courses">
+            <TabsList className="mb-6">
+              <TabsTrigger value="courses">
+                <Book className="mr-2 h-4 w-4" />
+                {t('dashboard.myCourses')}
+              </TabsTrigger>
+              <TabsTrigger value="events">
+                <CalendarDays className="mr-2 h-4 w-4" />
+                {t('dashboard.myEvents')}
+              </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="my-courses">
-              {mentorCourses.length === 0 ? (
+            <TabsContent value="courses">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">{t('dashboard.yourCourses')}</h2>
+                <Button onClick={() => {
+                  setCourseToEdit(null);
+                  setIsCreateCourseModalOpen(true);
+                }}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  {t('dashboard.createNewCourse')}
+                </Button>
+              </div>
+              
+              {isLoadingCourses ? (
+                <div className="flex justify-center items-center h-40">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-umuco-primary"></div>
+                </div>
+              ) : instructorCourses.length === 0 ? (
                 <Card>
-                  <CardContent className="pt-6 flex flex-col items-center justify-center min-h-[300px]">
-                    <Book className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
-                    <p className="text-xl font-medium text-gray-500 dark:text-gray-400">
-                      {t('courses.noCourses')}
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <BookOpen className="h-12 w-12 text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-center mb-2">
+                      {t('dashboard.noCourses')}
+                    </h3>
+                    <p className="text-gray-500 text-center max-w-md mb-6">
+                      {t('dashboard.noCoursesDescription')}
                     </p>
-                    <Button 
-                      className="mt-4" 
-                      onClick={() => setIsCreateDialogOpen(true)}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      {t('courses.createFirst')}
+                    <Button onClick={() => {
+                      setCourseToEdit(null);
+                      setIsCreateCourseModalOpen(true);
+                    }}>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      {t('dashboard.createFirstCourse')}
                     </Button>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {mentorCourses.map((course) => (
-                    <Card key={course.id} className="overflow-hidden">
-                      <div className="relative aspect-video">
-                        <img
-                          src={course.imageUrl || 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1920&q=80'}
-                          alt={course.title}
-                          className="h-full w-full object-cover"
-                        />
-                        <div className="absolute top-2 right-2 flex gap-1">
-                          {course.isFree ? (
-                            <Badge variant="secondary" className="bg-green-500">
-                              {t('courses.free')}
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="bg-umuco-secondary">
-                              ${course.price}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <CardHeader>
-                        <CardTitle>{course.title}</CardTitle>
-                        <CardDescription className="flex justify-between">
-                          <span>{course.category}</span>
-                          <span>{course.level}</span>
-                        </CardDescription>
-                      </CardHeader>
-                      
-                      <CardContent>
-                        <div className="flex justify-between items-center mb-4">
-                          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                            <Users className="mr-1 h-4 w-4" />
-                            <span>{course.studentsCount} {t('courses.students')}</span>
-                          </div>
-                          
-                          {!course.isFree && (
-                            <div className="flex items-center text-sm font-medium text-umuco-primary dark:text-umuco-tertiary">
-                              <DollarSign className="mr-1 h-4 w-4" />
-                              <span>${(course.price || 0) * (course.studentsCount || 0)}</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <p className="line-clamp-2 text-gray-600 dark:text-gray-400">
-                          {course.description.replace(/<[^>]*>/g, '')}
-                        </p>
-                      </CardContent>
-                      
-                      <CardFooter className="flex justify-between">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedCourse(course)}
-                        >
-                          <Edit className="mr-2 h-4 w-4" />
-                          {t('courses.edit')}
-                        </Button>
-                        
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteCourse(course.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          {t('courses.delete')}
-                        </Button>
-                      </CardFooter>
-                    </Card>
+                  {instructorCourses.map((course) => (
+                    <div key={course._id} className="relative">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="absolute top-2 right-2 z-10 bg-white/80 hover:bg-white dark:bg-gray-800/80 dark:hover:bg-gray-800 rounded-full"
+                        onClick={() => handleEditCourse(course)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <CourseCard
+                        key={course._id}
+                        course={course}
+                        onEnroll={() => {}}
+                        onClick={() => navigate(`/course/${course._id}`)}
+                      />
+                    </div>
                   ))}
                 </div>
               )}
             </TabsContent>
             
-            <TabsContent value="stats">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('dashboard.courseStats')}</CardTitle>
-                  <CardDescription>
-                    {t('dashboard.statsDescription')}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">
-                          {t('dashboard.totalCourses')}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {mentorCourses.length}
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">
-                          {t('dashboard.totalStudents')}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {totalStudentsCount}
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">
-                          {t('dashboard.averageRating')}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {mentorCourses.length > 0
-                            ? (
-                                mentorCourses.reduce(
-                                  (total, course) => total + (course.rating || 0),
-                                  0
-                                ) / mentorCourses.length
-                              ).toFixed(1)
-                            : "N/A"}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="earnings">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('dashboard.earningsOverview')}</CardTitle>
-                  <CardDescription>
-                    {t('dashboard.revenueDescription')}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-base">
-                          {t('dashboard.paymentHistory')}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          {mentorCourses
-                            .filter(course => !course.isFree && course.studentsCount > 0)
-                            .map((course) => (
-                              <div key={course.id} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className="h-10 w-10 rounded-full overflow-hidden">
-                                    <img 
-                                      src={course.imageUrl} 
-                                      alt={course.title}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-sm">{course.title}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {course.studentsCount} enrollments at ${course.price}
-                                    </p>
-                                  </div>
-                                </div>
-                                <p className="font-medium">${(course.price || 0) * (course.studentsCount || 0)}</p>
-                              </div>
-                            ))}
-                          
-                          {mentorCourses.filter(course => !course.isFree && course.studentsCount > 0).length === 0 && (
-                            <p className="text-center text-muted-foreground py-6">
-                              No payment history yet
-                            </p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </CardContent>
-              </Card>
+            <TabsContent value="events">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">{t('dashboard.yourEvents')}</h2>
+                <Button onClick={() => setIsCreateEventModalOpen(true)}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  {t('dashboard.createNewEvent')}
+                </Button>
+              </div>
+              
+              <EventsPanel 
+                events={events}
+                isLoading={isLoadingEvents}
+                title={t('dashboard.organizedEvents')}
+                description={t('dashboard.organizedEventsDescription')}
+              />
             </TabsContent>
           </Tabs>
         </div>
       </main>
       
-      {/* Create Course Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90%] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t('courses.createCourse')}</DialogTitle>
-            <DialogDescription>
-              {t('courses.createCourseDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <CourseForm onSubmit={handleCreateCourse} />
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateEventModal 
+        isOpen={isCreateEventModalOpen}
+        onClose={() => setIsCreateEventModalOpen(false)}
+      />
       
-      {/* Edit Course Dialog */}
-      <Dialog open={!!selectedCourse} onOpenChange={(open) => !open && setSelectedCourse(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{t('courses.editCourse')}</DialogTitle>
-            <DialogDescription>
-              {t('courses.editCourseDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedCourse && (
-            <CourseForm 
-              initialData={selectedCourse} 
-              onSubmit={handleEditCourse} 
-            />
-          )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedCourse(null)}>
-              {t('common.cancel')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateCourseModal
+        isOpen={isCreateCourseModalOpen}
+        onClose={() => {
+          setIsCreateCourseModalOpen(false);
+          setCourseToEdit(null);
+        }}
+        onSubmit={courseToEdit ? handleUpdateCourse : handleCreateCourse}
+        initialData={courseToEdit}
+        isEditing={!!courseToEdit}
+      />
       
       <Footer />
     </>

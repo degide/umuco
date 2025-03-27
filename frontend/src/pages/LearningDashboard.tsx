@@ -2,31 +2,31 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Video, FileText, List, Check, CheckCircle } from 'lucide-react';
+import { ChevronLeft, Video, FileText, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
-import { useCourses } from '@/hooks/useCourses';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { MarkdownViewer } from '@/components/ui/markdown-viewer';
+import courseService from '@/services/courseService';
+import enrollmentService from '@/services/enrollmentService';
 
 const LearningDashboard = () => {
   const { t } = useTranslation();
   const { courseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const { courses, updateCourseProgress } = useCourses();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [activeSection, setActiveSection] = useState(0);
   const [progress, setProgress] = useState(0);
-  
-  // Find the course
-  const course = courses.find(c => c.id === courseId);
+  const [course, setCourse] = useState(null);
+  const [enrollment, setEnrollment] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       toast({
         title: t('auth.required'),
         description: t('auth.loginToAccess'),
@@ -34,15 +34,57 @@ const LearningDashboard = () => {
       });
       navigate('/login');
     }
-  }, [isLoading, isAuthenticated, navigate, toast, t]);
+  }, [authLoading, isAuthenticated, navigate, toast, t]);
   
   useEffect(() => {
-    if (course?.progress) {
-      setProgress(course.progress);
-    }
-  }, [course]);
+    const fetchCourseAndEnrollment = async () => {
+      if (!courseId || !isAuthenticated) return;
+      
+      try {
+        setIsLoading(true);
+        
+        // Fetch course details
+        const courseData = await courseService.getCourseById(courseId);
+        setCourse(courseData);
+        
+        // Fetch user enrollments
+        const enrollments = await enrollmentService.getUserEnrollments();
+        const currentEnrollment = enrollments.find(e => e.course.id === courseId);
+        
+        if (!currentEnrollment) {
+          toast({
+            title: t('courses.notEnrolled'),
+            description: t('courses.enrollFirst'),
+            variant: "destructive",
+          });
+          navigate('/courses');
+          return;
+        }
+        
+        setEnrollment(currentEnrollment);
+        
+        // Calculate progress
+        if (currentEnrollment.progress.length > 0 && courseData.lessons.length > 0) {
+          const completedLessons = currentEnrollment.progress.filter(p => p.completed).length;
+          const progressPercentage = (completedLessons / courseData.lessons.length) * 100;
+          setProgress(progressPercentage);
+        }
+      } catch (error) {
+        console.error('Error fetching course data:', error);
+        toast({
+          title: t('common.error'),
+          description: t('courses.fetchError'),
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchCourseAndEnrollment();
+  }, [courseId, isAuthenticated, navigate, toast, t]);
   
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-umuco-primary border-t-transparent"></div>
@@ -72,36 +114,43 @@ const LearningDashboard = () => {
     );
   }
   
-  // Default sections if none exist
-  const sections = course.sections || [
-    {
-      title: 'Introduction to the Course',
-      content: 'Welcome to this course! This is the introduction section that gives an overview of what you will learn.',
-      videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-    },
-    {
-      title: 'Basic Concepts',
-      content: 'In this section, we will cover the fundamental concepts that form the foundation of this subject.',
-      videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-    }
-  ];
+  // Extract lessons from the course for the UI
+  const sections = course.lessons.sort((a, b) => a.order - b.order);
   
-  const handleComplete = () => {
-    // Calculate new progress
-    const newProgress = Math.min(100, progress + (100 / sections.length));
-    setProgress(newProgress);
-    updateCourseProgress(course.id, newProgress);
-    
-    if (activeSection < sections.length - 1) {
-      setActiveSection(activeSection + 1);
-      toast({
-        title: t('courses.sectionCompleted'),
-        description: t('courses.movingToNextSection'),
+  const handleComplete = async () => {
+    try {
+      if (!enrollment) return;
+      
+      const currentLesson = sections[activeSection];
+      
+      // Update lesson progress
+      await enrollmentService.updateLessonProgress(enrollment._id, {
+        lessonId: currentLesson._id,
+        completed: true
       });
-    } else if (newProgress >= 100) {
+      
+      // Calculate new progress
+      const newProgress = Math.min(100, ((activeSection + 1) / sections.length) * 100);
+      setProgress(newProgress);
+      
+      if (activeSection < sections.length - 1) {
+        setActiveSection(activeSection + 1);
+        toast({
+          title: t('courses.sectionCompleted'),
+          description: t('courses.movingToNextSection'),
+        });
+      } else if (newProgress >= 100) {
+        toast({
+          title: t('courses.courseCompleted'),
+          description: t('courses.congratulations'),
+        });
+      }
+    } catch (error) {
+      console.error('Error updating progress:', error);
       toast({
-        title: t('courses.courseCompleted'),
-        description: t('courses.congratulations'),
+        title: t('common.error'),
+        description: t('courses.progressUpdateError'),
+        variant: "destructive",
       });
     }
   };
@@ -129,7 +178,7 @@ const LearningDashboard = () => {
     const embedUrl = getYouTubeEmbedUrl(videoUrl);
     
     return (
-      <div className="aspect-video w-full rounded-lg overflow-hidden mb-6">
+      <div className="aspect-video w-full rounded-lg overflow-hidden mb-6 bg-gray-200">
         <iframe 
           src={embedUrl}
           title={sections[activeSection].title}
@@ -139,6 +188,14 @@ const LearningDashboard = () => {
         ></iframe>
       </div>
     );
+  };
+  
+  // Check if the current lesson is completed
+  const isCurrentLessonCompleted = () => {
+    if (!enrollment || !sections[activeSection]) return false;
+    
+    const lessonId = sections[activeSection]._id;
+    return enrollment.progress.some(p => p.lessonId === lessonId && p.completed);
   };
   
   return (
@@ -167,7 +224,7 @@ const LearningDashboard = () => {
                   </h2>
                   <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
                     <img
-                      src={course.instructor.avatarUrl}
+                      src={course.instructor.avatar || "/placeholder.svg"}
                       alt={course.instructor.name}
                       className="h-6 w-6 rounded-full mr-2"
                     />
@@ -192,41 +249,46 @@ const LearningDashboard = () => {
                     {t('courses.courseContent')}
                   </h3>
                   
-                  {sections.map((section, index) => (
-                    <div 
-                      key={index}
-                      className={`flex items-start p-3 rounded-md cursor-pointer transition-colors ${
-                        activeSection === index
-                          ? 'bg-umuco-primary/10 dark:bg-umuco-tertiary/10'
-                          : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                      onClick={() => setActiveSection(index)}
-                    >
-                      <div className="flex-shrink-0 mt-0.5 mr-3">
-                        {progress >= ((index + 1) / sections.length) * 100 ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : activeSection === index ? (
-                          <Video className="h-5 w-5 text-umuco-primary dark:text-umuco-tertiary" />
-                        ) : (
-                          <FileText className="h-5 w-5 text-gray-500" />
-                        )}
-                      </div>
-                      <div>
-                        <h4 className={`text-sm font-medium ${
+                  {sections.map((section, index) => {
+                    // Check if this lesson is completed
+                    const isCompleted = enrollment?.progress.some(
+                      p => p.lessonId === section._id && p.completed
+                    );
+                    
+                    return (
+                      <div 
+                        key={section._id}
+                        className={`flex items-start p-3 rounded-md cursor-pointer transition-colors ${
                           activeSection === index
-                            ? 'text-umuco-primary dark:text-umuco-tertiary'
-                            : 'text-gray-800 dark:text-gray-200'
-                        }`}>
-                          {index + 1}. {section.title}
-                        </h4>
-                        {section.subtitle && (
+                            ? 'bg-umuco-primary/10 dark:bg-umuco-tertiary/10'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                        onClick={() => setActiveSection(index)}
+                      >
+                        <div className="flex-shrink-0 mt-0.5 mr-3">
+                          {isCompleted ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : activeSection === index ? (
+                            <Video className="h-5 w-5 text-umuco-primary dark:text-umuco-tertiary" />
+                          ) : (
+                            <FileText className="h-5 w-5 text-gray-500" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className={`text-sm font-medium ${
+                            activeSection === index
+                              ? 'text-umuco-primary dark:text-umuco-tertiary'
+                              : 'text-gray-800 dark:text-gray-200'
+                          }`}>
+                            {index + 1}. {section.title}
+                          </h4>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {section.subtitle}
+                            {t('courses.duration')}: {section.duration} {t('courses.minutes')}
                           </p>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -235,21 +297,15 @@ const LearningDashboard = () => {
             <div className="lg:w-3/4">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                  {sections[activeSection].title}
+                  {sections[activeSection]?.title}
                 </h1>
                 
-                {sections[activeSection].subtitle && (
-                  <p className="text-lg text-gray-600 dark:text-gray-300 mb-6">
-                    {sections[activeSection].subtitle}
-                  </p>
-                )}
-                
                 {/* Video (if available) */}
-                {sections[activeSection].videoUrl && renderVideo(sections[activeSection].videoUrl)}
+                {sections[activeSection]?.videoUrl && renderVideo(sections[activeSection].videoUrl)}
                 
                 {/* Content */}
                 <div className="max-w-none">
-                  <MarkdownViewer content={sections[activeSection].content} />
+                  <MarkdownViewer content={sections[activeSection]?.content} />
                 </div>
                 
                 <div className="flex justify-between mt-10">
@@ -262,16 +318,17 @@ const LearningDashboard = () => {
                   </Button>
                   
                   {activeSection < sections.length - 1 ? (
-                    <Button onClick={handleComplete}>
-                      <Check className="mr-2 h-4 w-4" />
+                    <Button 
+                      onClick={handleComplete}
+                      disabled={isCurrentLessonCompleted()}
+                    >
                       {t('courses.completeAndContinue')}
                     </Button>
                   ) : (
                     <Button 
                       onClick={handleComplete}
-                      disabled={progress >= 100}
+                      disabled={isCurrentLessonCompleted() || progress >= 100}
                     >
-                      <Check className="mr-2 h-4 w-4" />
                       {t('courses.completeSection')}
                     </Button>
                   )}

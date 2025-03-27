@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
@@ -24,10 +23,12 @@ const ENROLLED_COURSES: Course[] = [
       avatarUrl: 'https://i.pravatar.cc/150?img=12',
     },
     isFree: true,
+    price: 0,
     rating: 4.8,
     studentsCount: 1893,
     enrolled: true,
     progress: 35,
+    lessons: 12,
   },
   {
     id: '6',
@@ -47,6 +48,7 @@ const ENROLLED_COURSES: Course[] = [
     studentsCount: 521,
     enrolled: true,
     progress: 65,
+    lessons: 8,
   },
 ];
 

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import { Users, Book, MessageSquare, BarChart, User, Shield, Award } from 'lucide-react';
@@ -19,109 +19,53 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCourses } from '@/hooks/useCourses';
-
-// Mock users for admin dashboard
-const MOCK_USERS = [
-  {
-    id: '1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    role: 'student',
-    status: 'active',
-    joinDate: '2023-06-15',
-    coursesEnrolled: 3,
-  },
-  {
-    id: '2',
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    role: 'mentor',
-    status: 'active',
-    joinDate: '2023-05-10',
-    coursesCreated: 5,
-  },
-  {
-    id: '3',
-    name: 'Admin User',
-    email: 'admin@example.com',
-    role: 'admin',
-    status: 'active',
-    joinDate: '2023-04-01',
-  },
-  {
-    id: '4',
-    name: 'Michael Johnson',
-    email: 'michael@example.com',
-    role: 'student',
-    status: 'inactive',
-    joinDate: '2023-07-20',
-    coursesEnrolled: 1,
-  },
-  {
-    id: '5',
-    name: 'Sarah Williams',
-    email: 'sarah@example.com',
-    role: 'mentor',
-    status: 'active',
-    joinDate: '2023-06-05',
-    coursesCreated: 2,
-  },
-];
-
-// Mock forum posts for admin dashboard
-const MOCK_FORUM_POSTS = [
-  {
-    id: '1',
-    title: 'Question about East African languages',
-    author: 'John Doe',
-    category: 'Languages',
-    status: 'active',
-    postDate: '2023-08-10',
-    repliesCount: 12,
-  },
-  {
-    id: '2',
-    title: 'Traditional cooking techniques discussion',
-    author: 'Sarah Williams',
-    category: 'Cuisine',
-    status: 'active',
-    postDate: '2023-08-05',
-    repliesCount: 8,
-  },
-  {
-    id: '3',
-    title: 'Looking for African literature recommendations',
-    author: 'Michael Johnson',
-    category: 'Literature',
-    status: 'flagged',
-    postDate: '2023-08-15',
-    repliesCount: 5,
-  },
-  {
-    id: '4',
-    title: 'Cultural adaptations in modern contexts',
-    author: 'Jane Smith',
-    category: 'History',
-    status: 'active',
-    postDate: '2023-08-12',
-    repliesCount: 15,
-  },
-  {
-    id: '5',
-    title: 'Traditional vs modern wedding ceremonies in Kenya',
-    author: 'John Doe',
-    category: 'Culture',
-    status: 'active',
-    postDate: '2023-08-08',
-    repliesCount: 20,
-  },
-];
+import { useUserManagement } from '@/hooks/useUserManagement';
+import { useForumPosts } from '@/hooks/useForumPosts';
 
 const AdminDashboard = () => {
   const { t } = useTranslation();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { courses } = useCourses();
+  const { courses, isLoading: isLoadingCourses } = useCourses();
+  const { 
+    users, 
+    stats, 
+    isLoading: isLoadingUsers,
+    updateUserRole 
+  } = useUserManagement();
+  const { 
+    posts: forumPosts, 
+    isLoading: isLoadingForumPosts,
+    deletePost 
+  } = useForumPosts();
+  
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  const [forumSearchQuery, setForumSearchQuery] = useState('');
+  
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [newRole, setNewRole] = useState<'student' | 'mentor' | 'admin'>('student');
+  
+  const [deletePostDialogOpen, setDeletePostDialogOpen] = useState(false);
+  const [postToDelete, setPostToDelete] = useState<string | null>(null);
   
   if (isLoading) {
     return (
@@ -135,20 +79,68 @@ const AdminDashboard = () => {
     return <Navigate to="/login" />;
   }
   
-  // Stats calculations
-  const totalStudents = MOCK_USERS.filter(user => user.role === 'student').length;
-  const totalMentors = MOCK_USERS.filter(user => user.role === 'mentor').length;
-  const totalCourses = courses.length;
-  const totalForumPosts = MOCK_FORUM_POSTS.length;
+  // Filter users based on search query
+  const filteredUsers = users.filter(
+    user => 
+      user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
+  );
+  
+  // Filter courses based on search query
+  const filteredCourses = courses.filter(
+    course => 
+      course.title.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
+      (course.description && course.description.toLowerCase().includes(courseSearchQuery.toLowerCase()))
+  );
+  
+  // Filter forum posts based on search query
+  const filteredForumPosts = forumPosts.filter(
+    post => 
+      post.title.toLowerCase().includes(forumSearchQuery.toLowerCase()) ||
+      post.content.toLowerCase().includes(forumSearchQuery.toLowerCase())
+  );
   
   // Format date
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
+  };
+  
+  const handleOpenRoleDialog = (user: any) => {
+    setSelectedUser(user);
+    setNewRole(user.role);
+    setRoleDialogOpen(true);
+  };
+  
+  const handleUpdateRole = async () => {
+    if (selectedUser && newRole) {
+      try {
+        await updateUserRole(selectedUser._id, newRole);
+        setRoleDialogOpen(false);
+      } catch (error) {
+        console.error('Error updating user role:', error);
+      }
+    }
+  };
+  
+  const handleOpenDeletePostDialog = (postId: string) => {
+    setPostToDelete(postId);
+    setDeletePostDialogOpen(true);
+  };
+  
+  const handleDeletePost = async () => {
+    if (postToDelete) {
+      try {
+        await deletePost(postToDelete);
+        setDeletePostDialogOpen(false);
+      } catch (error) {
+        console.error('Error deleting post:', error);
+      }
+    }
   };
   
   return (
@@ -177,7 +169,7 @@ const AdminDashboard = () => {
                 <div className="flex items-center">
                   <Users className="h-8 w-8 text-blue-500 mr-3" />
                   <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {totalStudents}
+                    {isLoadingUsers ? '...' : stats?.totalStudents || 0}
                   </div>
                 </div>
               </CardContent>
@@ -193,7 +185,7 @@ const AdminDashboard = () => {
                 <div className="flex items-center">
                   <Award className="h-8 w-8 text-purple-500 mr-3" />
                   <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {totalMentors}
+                    {isLoadingUsers ? '...' : stats?.totalMentors || 0}
                   </div>
                 </div>
               </CardContent>
@@ -209,7 +201,7 @@ const AdminDashboard = () => {
                 <div className="flex items-center">
                   <Book className="h-8 w-8 text-green-500 mr-3" />
                   <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {totalCourses}
+                    {isLoadingCourses ? '...' : courses.length}
                   </div>
                 </div>
               </CardContent>
@@ -225,7 +217,7 @@ const AdminDashboard = () => {
                 <div className="flex items-center">
                   <MessageSquare className="h-8 w-8 text-orange-500 mr-3" />
                   <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {totalForumPosts}
+                    {isLoadingForumPosts ? '...' : forumPosts.length}
                   </div>
                 </div>
               </CardContent>
@@ -265,86 +257,69 @@ const AdminDashboard = () => {
                       <Input
                         placeholder={t('dashboard.searchUsers')}
                         className="max-w-xs"
+                        value={userSearchQuery}
+                        onChange={(e) => setUserSearchQuery(e.target.value)}
                       />
-                      <Button variant="outline" size="icon">
-                        <Shield className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('dashboard.userName')}</TableHead>
-                        <TableHead>{t('dashboard.email')}</TableHead>
-                        <TableHead>{t('dashboard.role')}</TableHead>
-                        <TableHead>{t('dashboard.status')}</TableHead>
-                        <TableHead>{t('dashboard.joinDate')}</TableHead>
-                        <TableHead>{t('dashboard.actions')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {MOCK_USERS.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant="outline" 
-                              className={
-                                user.role === 'admin' 
-                                  ? 'border-red-500 text-red-500' 
-                                  : user.role === 'mentor'
-                                  ? 'border-purple-500 text-purple-500'
-                                  : 'border-blue-500 text-blue-500'
-                              }
-                            >
-                              {user.role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={user.status === 'active' ? 'default' : 'secondary'}
-                              className={
-                                user.status === 'active'
-                                  ? 'bg-green-500'
-                                  : 'bg-gray-500'
-                              }
-                            >
-                              {user.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{formatDate(user.joinDate)}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="sm">
-                                {t('dashboard.edit')}
-                              </Button>
-                              {user.role !== 'admin' && (
-                                <Button variant="destructive" size="sm">
-                                  {t('dashboard.suspend')}
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
+                  {isLoadingUsers ? (
+                    <div className="flex justify-center items-center h-40">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-umuco-primary border-t-transparent"></div>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('dashboard.userName')}</TableHead>
+                          <TableHead>{t('dashboard.email')}</TableHead>
+                          <TableHead>{t('dashboard.role')}</TableHead>
+                          <TableHead>{t('dashboard.joinDate')}</TableHead>
+                          <TableHead>{t('dashboard.actions')}</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.map((user) => (
+                          <TableRow key={user._id}>
+                            <TableCell className="font-medium">{user.name}</TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant="outline" 
+                                className={
+                                  user.role === 'admin' 
+                                    ? 'border-red-500 text-red-500' 
+                                    : user.role === 'mentor'
+                                    ? 'border-purple-500 text-purple-500'
+                                    : 'border-blue-500 text-blue-500'
+                                }
+                              >
+                                {user.role}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{formatDate(user.createdAt)}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleOpenRoleDialog(user)}
+                                >
+                                  {t('dashboard.changeRole')}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </CardContent>
                 <CardFooter className="flex justify-between">
                   <Button variant="outline">
                     {t('dashboard.exportData')}
                   </Button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled>
-                      {t('dashboard.previous')}
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      {t('dashboard.next')}
-                    </Button>
-                  </div>
                 </CardFooter>
               </Card>
             </TabsContent>
@@ -361,82 +336,79 @@ const AdminDashboard = () => {
                       <Input
                         placeholder={t('dashboard.searchCourses')}
                         className="max-w-xs"
+                        value={courseSearchQuery}
+                        onChange={(e) => setCourseSearchQuery(e.target.value)}
                       />
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('dashboard.courseTitle')}</TableHead>
-                        <TableHead>{t('dashboard.category')}</TableHead>
-                        <TableHead>{t('dashboard.instructor')}</TableHead>
-                        <TableHead>{t('dashboard.pricing')}</TableHead>
-                        <TableHead>{t('dashboard.students')}</TableHead>
-                        <TableHead>{t('dashboard.actions')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {courses.map((course) => (
-                        <TableRow key={course.id}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="h-10 w-10 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0"
-                              >
-                                {course.imageUrl && (
-                                  <img 
-                                    src={course.imageUrl} 
-                                    alt={course.title} 
-                                    className="h-full w-full object-cover"
-                                  />
-                                )}
-                              </div>
-                              <span className="line-clamp-1">{course.title}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{course.category}</TableCell>
-                          <TableCell>{course.instructor?.name}</TableCell>
-                          <TableCell>
-                            {course.isFree ? (
-                              <Badge variant="outline" className="border-green-500 text-green-500">
-                                {t('courses.free')}
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="border-umuco-secondary text-umuco-secondary">
-                                ${course.price}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>{course.studentsCount || 0}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="sm">
-                                {t('dashboard.view')}
-                              </Button>
-                              <Button variant="destructive" size="sm">
-                                {t('dashboard.remove')}
-                              </Button>
-                            </div>
-                          </TableCell>
+                  {isLoadingCourses ? (
+                    <div className="flex justify-center items-center h-40">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-umuco-primary border-t-transparent"></div>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('dashboard.courseTitle')}</TableHead>
+                          <TableHead>{t('dashboard.category')}</TableHead>
+                          <TableHead>{t('dashboard.instructor')}</TableHead>
+                          <TableHead>{t('dashboard.pricing')}</TableHead>
+                          <TableHead>{t('dashboard.students')}</TableHead>
+                          <TableHead>{t('dashboard.actions')}</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredCourses.map((course) => (
+                          <TableRow key={course.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="h-10 w-10 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0"
+                                >
+                                  {course.imageUrl && (
+                                    <img 
+                                      src={course.imageUrl} 
+                                      alt={course.title} 
+                                      className="h-full w-full object-cover"
+                                    />
+                                  )}
+                                </div>
+                                <span className="line-clamp-1">{course.title}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{course.category}</TableCell>
+                            <TableCell>{course.instructor?.name}</TableCell>
+                            <TableCell>
+                              {course.isFree ? (
+                                <Badge variant="outline" className="border-green-500 text-green-500">
+                                  {t('courses.free')}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="border-umuco-secondary text-umuco-secondary">
+                                  ${course.price}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>{course.studentsCount || 0}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button variant="ghost" size="sm">
+                                  {t('dashboard.view')}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </CardContent>
                 <CardFooter className="flex justify-between">
                   <Button variant="outline">
                     {t('dashboard.exportData')}
                   </Button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled>
-                      {t('dashboard.previous')}
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      {t('dashboard.next')}
-                    </Button>
-                  </div>
                 </CardFooter>
               </Card>
             </TabsContent>
@@ -453,80 +425,63 @@ const AdminDashboard = () => {
                       <Input
                         placeholder={t('dashboard.searchDiscussions')}
                         className="max-w-xs"
+                        value={forumSearchQuery}
+                        onChange={(e) => setForumSearchQuery(e.target.value)}
                       />
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('dashboard.topic')}</TableHead>
-                        <TableHead>{t('dashboard.author')}</TableHead>
-                        <TableHead>{t('dashboard.category')}</TableHead>
-                        <TableHead>{t('dashboard.status')}</TableHead>
-                        <TableHead>{t('dashboard.datePosted')}</TableHead>
-                        <TableHead>{t('dashboard.replies')}</TableHead>
-                        <TableHead>{t('dashboard.actions')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {MOCK_FORUM_POSTS.map((post) => (
-                        <TableRow key={post.id}>
-                          <TableCell className="font-medium">
-                            {post.title}
-                          </TableCell>
-                          <TableCell>{post.author}</TableCell>
-                          <TableCell>{post.category}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={post.status === 'active' ? 'default' : 'secondary'}
-                              className={
-                                post.status === 'active'
-                                  ? 'bg-green-500'
-                                  : post.status === 'flagged'
-                                  ? 'bg-amber-500'
-                                  : 'bg-gray-500'
-                              }
-                            >
-                              {post.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{formatDate(post.postDate)}</TableCell>
-                          <TableCell>{post.repliesCount}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="sm">
-                                {t('dashboard.view')}
-                              </Button>
-                              {post.status === 'flagged' ? (
-                                <Button variant="outline" size="sm">
-                                  {t('dashboard.approve')}
+                  {isLoadingForumPosts ? (
+                    <div className="flex justify-center items-center h-40">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-umuco-primary border-t-transparent"></div>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('dashboard.topic')}</TableHead>
+                          <TableHead>{t('dashboard.author')}</TableHead>
+                          <TableHead>{t('dashboard.category')}</TableHead>
+                          <TableHead>{t('dashboard.datePosted')}</TableHead>
+                          <TableHead>{t('dashboard.views')}</TableHead>
+                          <TableHead>{t('dashboard.actions')}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredForumPosts.map((post) => (
+                          <TableRow key={post._id}>
+                            <TableCell className="font-medium">
+                              {post.title}
+                            </TableCell>
+                            <TableCell>{post.author.name}</TableCell>
+                            <TableCell>{post.category}</TableCell>
+                            <TableCell>{formatDate(post.createdAt)}</TableCell>
+                            <TableCell>{post.views}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button variant="ghost" size="sm">
+                                  {t('dashboard.view')}
                                 </Button>
-                              ) : (
-                                <Button variant="destructive" size="sm">
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm"
+                                  onClick={() => handleOpenDeletePostDialog(post._id)}
+                                >
                                   {t('dashboard.remove')}
                                 </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </CardContent>
                 <CardFooter className="flex justify-between">
                   <Button variant="outline">
                     {t('dashboard.exportData')}
                   </Button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled>
-                      {t('dashboard.previous')}
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      {t('dashboard.next')}
-                    </Button>
-                  </div>
                 </CardFooter>
               </Card>
             </TabsContent>
@@ -556,6 +511,61 @@ const AdminDashboard = () => {
           </Tabs>
         </div>
       </main>
+      
+      {/* Dialog for changing user role */}
+      <AlertDialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dashboard.changeUserRole')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dashboard.changeRoleDescription')} <strong>{selectedUser?.name}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Select
+              value={newRole}
+              onValueChange={(value: 'student' | 'mentor' | 'admin') => setNewRole(value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="student">Student</SelectItem>
+                <SelectItem value="mentor">Mentor</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUpdateRole}>
+              {t('common.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Dialog for deleting forum post */}
+      <AlertDialog open={deletePostDialogOpen} onOpenChange={setDeletePostDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dashboard.confirmDeletePost')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dashboard.confirmDeletePostDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePost}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
       <Footer />
     </>
   );

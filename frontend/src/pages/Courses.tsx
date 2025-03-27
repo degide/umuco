@@ -10,7 +10,7 @@ import CourseDetailsModal from '@/components/courses/CourseDetailsModal';
 
 const Courses = () => {
   const { t } = useTranslation();
-  const { courses, enrollInCourse } = useCourses();
+  const { courses, enrollInCourse, isLoading } = useCourses();
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   
   const handleOpenCourseDetails = (course: Course) => {
@@ -35,12 +35,18 @@ const Courses = () => {
             </p>
           </div>
           
-          <CourseGrid 
-            courses={courses} 
-            onEnroll={enrollInCourse}
-            onCourseClick={handleOpenCourseDetails}
-            showFilters={true}
-          />
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-umuco-primary border-t-transparent"></div>
+            </div>
+          ) : (
+            <CourseGrid 
+              courses={courses} 
+              onEnroll={enrollInCourse}
+              onCourseClick={handleOpenCourseDetails}
+              showFilters={true}
+            />
+          )}
         </div>
       </main>
       
