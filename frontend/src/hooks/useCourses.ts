@@ -81,11 +81,11 @@ export const useCourses = () => {
     } catch (err) {
       console.error('Error fetching recommended courses:', err);
       setError('Failed to load recommended courses');
-      toast({
-        title: 'Error',
-        description: 'Failed to load recommended courses',
-        variant: 'destructive',
-      });
+      // toast({
+      //   title: 'Error',
+      //   description: 'Failed to load recommended courses',
+      //   variant: 'destructive',
+      // });
     } finally {
       setIsLoading(false);
     }

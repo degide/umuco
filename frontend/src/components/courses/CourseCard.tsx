@@ -124,8 +124,7 @@ export const CourseCard: React.FC<CourseCardProps> = ({ course, onEnroll }) => {
           {course.title}
         </h3>
 
-        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-          {course.description}
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400 line-clamp-2" dangerouslySetInnerHTML={{__html: course.description}}>
         </p>
 
         <div className="mb-5 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">

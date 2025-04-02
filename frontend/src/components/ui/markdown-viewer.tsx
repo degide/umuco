@@ -18,11 +18,11 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   
   return maxHeight ? (
     <ScrollArea className={`${containerClasses}`} style={{ maxHeight }}>
-      <ReactMarkdown>{content}</ReactMarkdown>
+      <p dangerouslySetInnerHTML={{__html: content}}></p>
     </ScrollArea>
   ) : (
     <div className={containerClasses}>
-      <ReactMarkdown>{content}</ReactMarkdown>
+      <p dangerouslySetInnerHTML={{__html: content}}></p>
     </div>
   );
 };

@@ -49,7 +49,7 @@ const LearningDashboard = () => {
         
         // Fetch user enrollments
         const enrollments = await enrollmentService.getUserEnrollments();
-        const currentEnrollment = enrollments.find(e => e.course.id === courseId);
+        const currentEnrollment = enrollments.find(e => e.course._id === courseId);
         
         if (!currentEnrollment) {
           toast({
@@ -165,7 +165,7 @@ const LearningDashboard = () => {
       if (url.includes('youtube.com/embed/')) return url;
       
       // Extract video ID from watch URL or youtu.be URL
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
       const match = url.match(regExp);
       
       if (match && match[2].length === 11) {

@@ -253,8 +253,7 @@ const Dashboard = () => {
                           <h3 className="font-bold text-gray-900 dark:text-white">
                             {course.title}
                           </h3>
-                          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                            {course.description}
+                          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2" dangerouslySetInnerHTML={{__html: course.description}}>
                           </p>
                           
                           <div className="mt-4 flex items-center justify-between">
