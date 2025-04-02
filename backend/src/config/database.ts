@@ -10,7 +10,7 @@ const connectDB = async (): Promise<void> => {
     const conn = await mongoose.connect(MONGO_URI, {
       autoCreate: true,
       autoIndex: true,
-      tls: false
+      tls: !(MONGO_URI.includes("localhost") && MONGO_URI.includes("127.0.0.1"))
     });
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
