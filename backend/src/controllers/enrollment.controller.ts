@@ -124,7 +124,7 @@ export const getEnrollmentById = async (req: Request, res: Response): Promise<vo
     // Check if user is enrolled or is instructor/admin
     if (
       enrollment.user.toString() !== req.user.id &&
-      enrollment.course.instructor._id.toString() !== req.user.id &&
+        (enrollment.course as any).instructor._id.toString() !== req.user.id &&
       req.user.role !== 'admin'
     ) {
       res.status(403);
@@ -228,7 +228,7 @@ export const getInstructorStats = async (req: Request, res: Response): Promise<v
     const enrollmentsByCourse = await Enrollment.aggregate([
       {
         $match: {
-          course: { $in: courseIds.map(id => new mongoose.Types.ObjectId(id.toString())) },
+          course: { $in: courseIds.map(id => new mongoose.Types.ObjectId((id as any).toString())) },
         },
       },
       {

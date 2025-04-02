@@ -1,5 +1,5 @@
 
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary, UploadApiResponse, DeleteApiResponse } from 'cloudinary';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,7 +13,7 @@ cloudinary.config({
 export const uploadToCloudinary = async (
   filePath: string,
   folder = 'umuco'
-): Promise<cloudinary.UploadApiResponse> => {
+): Promise<UploadApiResponse> => {
   return await cloudinary.uploader.upload(filePath, {
     folder,
   });
@@ -21,7 +21,7 @@ export const uploadToCloudinary = async (
 
 export const deleteFromCloudinary = async (
   publicId: string
-): Promise<cloudinary.DeleteApiResponse> => {
+): Promise<DeleteApiResponse> => {
   return await cloudinary.uploader.destroy(publicId);
 };
 

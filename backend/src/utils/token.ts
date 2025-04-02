@@ -8,9 +8,9 @@ export const generateToken = (
 ): string => {
   return jwt.sign(
     { id, role },
-    process.env.JWT_SECRET || 'fallback_secret',
+    process.env.JWT_SECRET || 'fallback_secret' as any,
     {
-      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d' as any,
     }
   );
 };
@@ -21,9 +21,9 @@ export const generateRefreshToken = (
 ): string => {
   return jwt.sign(
     { id, role },
-    process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
+    process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret' as any,
     {
-      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
+      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' as any,
     }
   );
 };

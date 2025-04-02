@@ -12,11 +12,12 @@ export interface ICourse extends Document {
   level: string;
   duration: number;
   lessons: {
-    title: string;
-    content: string;
-    videoUrl?: string;
-    duration: number;
-    order: number;
+      _id: any,
+      title: string;
+      content: string;
+      videoUrl?: string;
+      duration: number;
+      order: number;
   }[];
   enrolledCount: number;
   rating: number;

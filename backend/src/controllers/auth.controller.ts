@@ -18,7 +18,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       throw new Error('User already exists');
     }
 
-    const user = await User.create({
+    const user: any = await User.create({
       name,
       email,
       password,
@@ -26,11 +26,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (user) {
-      const token = generateToken(user._id.toString(), user.role);
-      const refreshToken = generateRefreshToken(user._id.toString(), user.role);
+      const token = generateToken((user._id as any).toString(), user.role);
+      const refreshToken = generateRefreshToken((user._id as any).toString(), user.role);
 
       res.status(201).json({
-        _id: user._id,
+        _id: (user._id as any),
         name: user.name,
         email: user.email,
         role: user.role,
@@ -62,11 +62,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const user = await User.findOne({ email }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
-      const token = generateToken(user._id.toString(), user.role);
-      const refreshToken = generateRefreshToken(user._id.toString(), user.role);
+      const token = generateToken((user._id as any).toString(), user.role);
+      const refreshToken = generateRefreshToken((user._id as any).toString(), user.role);
 
       res.json({
-        _id: user._id,
+        _id: (user._id as any),
         name: user.name,
         email: user.email,
         role: user.role,
@@ -108,8 +108,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       throw new Error('User not found');
     }
 
-    const token = generateToken(user._id.toString(), user.role);
-    const newRefreshToken = generateRefreshToken(user._id.toString(), user.role);
+    const token = generateToken((user._id as any).toString(), user.role);
+    const newRefreshToken = generateRefreshToken((user._id as any).toString(), user.role);
 
     res.json({
       token,
